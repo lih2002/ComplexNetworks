@@ -1,0 +1,463 @@
+/**
+ * 
+ */
+package network;
+
+import edu.uci.ics.jung.graph.*;
+
+import edu.uci.ics.jung.graph.util.EdgeType;
+import edu.uci.ics.jung.graph.util.Pair;
+import io.FileOperation;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.*;
+
+import tools.Debug;
+import tools.MathTool;
+
+/**
+ * @author gexin
+ * 
+ */
+public abstract class AbstractNetwork extends
+		UndirectedSparseGraph<AbstractV, AbstractE> {
+
+	protected static String netID;
+
+	public String getNetID() {
+		return netID;
+	}
+
+	public void setNetID(String netID) {
+		AbstractNetwork.netID = netID;
+	}
+
+	/**
+	 * add edge linking node A and node B
+	 * 
+	 * @param e
+	 * @param vA
+	 * @param vB
+	 * @return
+	 */
+	public boolean addEdge(String vA, String vB) {
+
+		return addEdge(createNewEdge(), this.createNewVertex(vA),
+				this.createNewVertex(vB));
+
+	}
+
+	/**
+	 * remove vertex according to vertex ID
+	 * 
+	 * @param vID
+	 * @return
+	 */
+	public boolean removeVertex(String vID) {
+		AbstractV removedV = null;
+		for (AbstractV v : getVertices()) {
+			if (v.getID().equals(vID)) {
+				removedV = v;
+				break;
+			}
+		}
+
+		return this.removeVertex(removedV);
+	}
+
+	public boolean removeEdge(String edgeID) {
+		for (AbstractE e : getEdges()) {
+			if (e.getID().equals(edgeID)) {
+				return this.removeEdge(e);
+			}
+		}
+		return false;
+	}
+
+	public boolean removeEdge(AbstractV vA, AbstractV vB) {
+
+		for (AbstractE e : this.getEdges()) {
+
+			Pair<AbstractV> p = getEndpoints(e);
+
+			// Debug.outn(p.getFirst()+" "+p.getSecond());
+			// Debug.outn(p.getFirst().getID()+" "+p.getSecond().getID());
+
+			if (p.getFirst().equals(vB) && p.getSecond().equals(vA)) {
+				// Debug.outn("find e");
+				return this.removeEdge(e);
+			}
+
+			if (p.getFirst().equals(vA) && p.getSecond().equals(vB)) {
+				// Debug.outn("find e");
+				return this.removeEdge(e);
+			}
+		}
+
+		return false;
+
+	}
+
+	/**
+	 * remove one edge according to the vertices ID
+	 * 
+	 * @param vertexAID
+	 * @param vertexBID
+	 * @return
+	 */
+	public boolean removeEdge(String vertexAID, String vertexBID) {
+		if (!containVertex(vertexAID) || !containVertex(vertexAID)) {
+
+			return false;
+		}
+
+		for (AbstractE e : this.getEdges()) {
+
+			Pair<AbstractV> p = getEndpoints(e);
+
+			// Debug.outn(p.getFirst()+" "+p.getSecond());
+			// Debug.outn(p.getFirst().getID()+" "+p.getSecond().getID());
+
+			if (p.getFirst().getID().equals(vertexBID)
+					&& p.getSecond().getID().equals(vertexAID)) {
+				Debug.outn("find e");
+				return this.removeEdge(e);
+			}
+
+			if (p.getFirst().getID().equals(vertexAID)
+					&& p.getSecond().getID().equals(vertexBID)) {
+				Debug.outn("find e");
+				return this.removeEdge(e);
+			}
+		}
+
+		return false;
+
+	}
+
+	public abstract AbstractV createNewVertex(String vertexID);
+
+	public abstract AbstractNetwork getBlankNetwork();
+
+	public boolean saveNetToFile(String savePath) {
+		return saveNetToFile(savePath, "", "");
+
+	}
+
+	public boolean saveNetToFile(String savePath, String saveName) {
+		return saveNetToFile(savePath, saveName, "");
+	}
+
+	public boolean saveNetToFile(String savePath, String saveName,
+			String linkSplit) {
+
+		if (saveName.equals("")) {
+			saveName = this.getNetID();
+		}
+
+		if (linkSplit.equals("")) {
+
+			linkSplit = "\t";
+
+		}
+
+		String filePathName = savePath + saveName;
+		try {
+
+			FileWriter fw = new FileWriter(new File(filePathName));
+
+			for (AbstractE edge : this.getEdges()) {
+
+				AbstractV nodeA = this.getEndpoints(edge).getFirst();
+				AbstractV nodeB = this.getEndpoints(edge).getSecond();
+
+				fw.write(nodeA + linkSplit + nodeB + FileOperation.LINE_BREAK);
+
+			}
+
+			fw.flush();
+			fw.close();
+
+		} catch (IOException ioe) {
+
+			return false;
+		}
+
+		return true;
+	}
+
+	public boolean loadNetworkData(String filePathName) {
+		// file name as network ID
+
+		return loadNetworkData(filePathName, "");
+	}
+
+	public boolean loadNetworkData(String filePathName, String netID) {
+
+		FileReader fr;
+		BufferedReader br;
+
+		// file name as network ID
+		if (netID.equals("")) {
+			netID = (new File(filePathName)).getName();
+		}
+
+		try {
+
+			fr = new FileReader(new File(filePathName));
+			br = new BufferedReader(fr);
+
+			String oneLine = br.readLine();
+
+			// Debug.outn(oneLine);
+
+			while (oneLine != null) { // read line. one edge in one line.
+
+				String[] stokens = oneLine.split("[\t ]");
+
+				if (stokens.length > 1) {
+
+					String v1 = stokens[0].trim();
+					String v2 = stokens[1].trim();
+
+					addEdge(createNewEdge(), createNewVertex(v1),
+							createNewVertex(v2));
+					// Debug.outn(oneLine);
+
+				}
+				oneLine = br.readLine();
+			}
+
+			fr.close();
+			br.close();
+
+		} catch (IOException ioe) {
+
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * random select one vertex from network.
+	 * 
+	 * @return
+	 */
+	public AbstractV randomGetVertex() {
+
+		int random = MathTool.randomInt(0, getVertexCount(), 1)[0];
+		Iterator<AbstractV> nodes = getVertices().iterator();
+		AbstractV node = null;
+		while (nodes.hasNext()) {
+			node = nodes.next();
+			if (random == 0) {
+				break;
+			} else {
+				random--;
+			}
+		}
+
+		return node;
+	}
+
+	public Vector<AbstractV> getAllVertex() {
+
+		Vector<AbstractV> nodes = new Vector<AbstractV>();
+
+		Iterator<AbstractV> allNodesItor = this.getVertices().iterator();
+		while (allNodesItor.hasNext()) {
+			nodes.add(allNodesItor.next());
+		}
+		return nodes;
+	}
+
+	public AbstractV getVertex(AbstractV vertex) {
+
+		AbstractV findedNode = null;
+
+		for (AbstractV node : getVertices()) {
+			if (node.equals(vertex)) {
+				findedNode = node;
+				break;
+			}
+		}
+
+		return findedNode;
+	}
+
+	public AbstractV getVertex(String nodeID) {
+		AbstractV findedNode = null;
+
+		for (AbstractV node : getVertices()) {
+			if (node.getID().equals(nodeID)) {
+				findedNode = node;
+				break;
+			}
+		}
+
+		return findedNode;
+	}
+
+	public boolean containEdge(AbstractV vA, AbstractV vB) {
+		for (AbstractE e : getEdges()) {
+
+			Pair<AbstractV> p = getEndpoints(e);
+			if (p.getFirst().equals(vA) && p.getSecond().equals(vB)) {
+				return true;
+			}
+			if (p.getFirst().equals(vB) && p.getSecond().equals(vA)) {
+				return true;
+			}
+
+		}
+
+		return false;
+	}
+
+	public boolean containEdge(String vAID, String vBID) {
+
+		for (AbstractE e : getEdges()) {
+
+			Pair<AbstractV> p = getEndpoints(e);
+			if (p.getFirst().getID().equals(vAID)
+					&& p.getSecond().getID().equals(vBID)) {
+
+			}
+			if (p.getFirst().getID().equals(vBID)
+					&& p.getSecond().getID().equals(vAID)) {
+
+			}
+
+		}
+
+		return false;
+
+	}
+
+	public boolean containVertex(String nodeID) {
+
+		boolean find = false;
+
+		for (Iterator<AbstractV> itr = getVertices().iterator(); itr.hasNext();) {
+			if (itr.next().getID().equals(nodeID)) {
+				find = true;
+				break;
+			}
+		}
+		return find;
+	}
+
+	public Set<String> getAllVertexIDSet() {
+
+		HashSet<String> allID = new HashSet<String>();
+
+		Iterator<AbstractV> allNodesItor = this.getVertices().iterator();
+		while (allNodesItor.hasNext()) {
+			allID.add(allNodesItor.next().getID());
+		}
+
+		return allID;
+	}
+	
+	public Vector<String> getAllVertexIDVector(){
+		Vector<String> allID = new Vector<String>();
+		
+		for(AbstractV v:this.getVertices()){
+			allID.add(v.getID());
+		}
+		
+		return allID;
+	}
+
+	public int getVertexDegree(String nodeID) {
+		int degree = -1;
+		for (AbstractV node : getVertices()) {
+			if (node.getID().equals(nodeID)) {
+				return this.getNeighborCount(node);
+			}
+		}
+
+		return degree;
+	}
+
+	public Vector<AbstractE> getAllEdges() {
+		Vector<AbstractE> nodes = new Vector<AbstractE>();
+
+		for(AbstractE e:getEdges()){
+			nodes.add(e);
+		}
+		
+		return nodes;
+	}
+
+	public Vector<AbstractV> getNeighborVertices(AbstractV node) {
+		Vector<AbstractV> nodes = new Vector<AbstractV>();
+
+		Iterator<AbstractV> allNodesItor = this.getNeighbors(node).iterator();
+		while (allNodesItor.hasNext()) {
+			nodes.add(allNodesItor.next());
+		}
+
+		return nodes;
+	}
+
+	/*
+	 * 所有节点的度
+	 */
+	public int[] getAllVertexDegrees() {
+		int[] degrees = new int[this.getVertexCount()];
+		Iterator<AbstractV> allNodeIter = getVertices().iterator();
+		int i = 0;
+		while (allNodeIter.hasNext()) {
+			degrees[i] = this.getNeighborCount(allNodeIter.next());
+			i++;
+		}
+
+		return degrees;
+
+	}
+
+	public Set<AbstractV> getVertexWithDegree(int degree) {
+
+		Iterator<AbstractV> vIt = getVertices().iterator();
+		Set<AbstractV> vertices = new HashSet<AbstractV>();
+
+		while (vIt.hasNext()) {
+			AbstractV v = vIt.next();
+			if (getNeighborCount(v) == degree) {
+				vertices.add(v);
+			}
+		}
+
+		return vertices;
+
+	}
+
+	@Override
+	public String toString() {
+		return "AbstractNetwork [getEdges()=" + getEdges() + ", getVertices()="
+				+ getVertices() + ", getEdgeCount()=" + getEdgeCount()
+				+ ", getVertexCount()=" + getVertexCount()
+				+ ", getDefaultEdgeType()=" + getDefaultEdgeType()
+				+ ", toString()=" + super.toString() + ", getClass()="
+				+ getClass() + ", hashCode()=" + hashCode() + "]";
+	}
+
+	/**
+	 * create new edge without linking to vertex
+	 * 
+	 * @return
+	 */
+	public abstract AbstractE createNewEdge();
+
+	public AbstractNetwork cloneOneBlankNetwork() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+}

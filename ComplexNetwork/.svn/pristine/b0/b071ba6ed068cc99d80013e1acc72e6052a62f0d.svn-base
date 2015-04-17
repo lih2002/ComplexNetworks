@@ -1,0 +1,235 @@
+/**
+ * 
+ */
+package model;
+
+import java.util.Observable;
+
+import network.AbstractE;
+import network.AbstractNetwork;
+import network.AbstractV;
+import tools.*;
+
+/**
+ * PFP net model.
+ * (1) with probability p[0,1], a new node is attached to
+ * 	one host node, and at the same time one new internal link
+ *	appears between the host node and a peer node; 
+ *</p>(2)
+ *</p>
+ * @author 葛新
+ *
+ */
+public class PFPModel extends AbstractModel {
+	
+	private double probP;// 概率q：[0,1]
+	private double probQ;// 概率p：[0,1-p]
+	private double delta; // 
+	
+	protected synchronized double getP() {
+		return probP;
+	}
+
+	protected synchronized void setP(double p) {
+		this.probP = p;
+	}
+
+	protected synchronized double getQ() {
+		return probQ;
+	}
+
+	protected synchronized void setQ(double q) {
+		this.probQ = q;
+	}
+
+	protected synchronized double getDelta() {
+		return delta;
+	}
+
+	protected synchronized void setDelta(double delta) {
+		this.delta = delta;
+	}
+
+	/**
+	 * @param p
+	 * @param q
+	 */
+	public PFPModel(double p, double q , double delta) {
+		super();
+		this.delta= delta;
+		this.probP = p;
+		this.probQ = q;
+	}
+
+	/* (non-Javadoc)
+	 * @see complex.model.AbstractModel#createNodeEdges(complex.network.AbstractNetwork, double[])
+	 */
+	@Override
+	public AbstractV[] insertNodeWithEdges(AbstractNetwork net) {
+
+		double p = this.probP;
+		double q = this.probQ;
+		if (q > 1 - p) { // q必须小于等于1-p;
+			//return null;
+		}
+
+		/*先建立新节点*/
+		AbstractV newNode = net.getVertices(null);
+		net.addVertex(newNode);
+		//Debug.outn(net.getNetworkSize());
+
+		double randomAction = Math.random();
+		//randomAction = 0.2;
+
+		/*根据不同的概率建立边*/
+		if (randomAction <= p) { ///以概率p
+			//Debug.outn("概率p "+p);
+			int[] ngbNode = new int[1];//新节点与一个节点建立边
+
+			/*按优先函数选择一个节点与新加入节点建立外部边*/
+			
+			AbstractE newEdge = net.createNewEdge(null);
+			AbstractV prefNode = chooseOneNode(net);//根据优先概率选择邻居节点		
+			net.addEdge(newEdge	, newNode, prefNode);
+			//Debug.outn("prefNode"+prefNode);
+
+			/*新加入节点的邻居节点再与网络中节点建立一条内部边*/			
+			AbstractE internalNewEdge = net.createNewEdge(null);
+						
+			for (int i = 0; i < 1; i++) {
+				boolean insertOK=net.addEdge(internalNewEdge, prefNode, chooseOneNode(net));
+				//根据模型选择邻居节点				
+				if (insertOK) { //插入内部边，有可能该边已经存在，确保两条边成功建立，不重复。
+					i++;
+					
+				} else {//重新选择邻居
+					//Debug.outn(i);
+					continue;
+				}
+			}
+
+			//Debug.outn("PFPModel.insertNodeWithEdges: nweNode.AIdx BIdx "+newEdge.AIdx+" "+newEdge.BIdx);
+			net.insertEdge(newEdge);//插入新节点的边
+
+			ngbNode[0] = prefNode.getID();
+
+			return ngbNode;
+
+		} else {
+			if (randomAction <= p + q) { //以概率q
+				//Debug.outn("概率q "+q);
+				int[] ngbNodes = new int[1];//与一个节点建立边
+
+				/*按优先函数选择一个节点与新加入节点建立外部边*/
+				AbstractE newEdge = net.getNewEdge();
+				newEdge.setNodeA(net,newNode);
+				AbstractV prefNode = chooseOneNode(net);
+				newEdge.setNodeB(net,prefNode);//根据优先概率选择邻居节点	
+
+				/*新加入节点的邻居节点再与网络中节点建立两条内部边*/
+				int ngbNodeIdx = newEdge.BIdx;
+
+				/*根据邻居数量建立边*/
+				for (int j = 0; j < 2;) {
+
+					AbstractE internalEdge = net.getNewEdge();
+					internalEdge.setNodeA(net,prefNode);					
+					internalEdge.setNodeB(net,chooseOneNode(net));//根据模型选择邻居节点
+					//Debug.outn("PFP model insertNodeWithEdges() new Edge "+prefNode.getIdx()+" "+ internalEdge.getBIdx());
+
+					if (net.insertEdge(internalEdge) != null) { //确保两条边成功建立，不重复。
+
+						//Debug.outn("新节点 "+j+" "+newNode.idx+"邻居 "+newEdge.BIdx);
+						; /* 有可能出现自连接或重复的边 */
+						// Debug.outn("insert "+j);						
+						j++;
+					} else {
+						continue;
+					}
+				}//////////////插入边				
+
+				net.insertEdge(newEdge);//插入新节点的边
+
+				ngbNodes[0] = prefNode.getID();
+
+				return ngbNodes;
+
+			} else { //以概率1-p-q
+				//Debug.outn("概率1-p-q "+(1-p-q));
+				int[] ngbNodes = new int[2];//与2个节点建立边
+
+				/*根据邻居数量建立边*/
+				for (int j = 0; j < 2;) {
+
+					AbstractE newEdge = net.getNewEdge();
+					newEdge.setNodeA(net,newNode);
+					AbstractV prefNode = chooseOneNode(net);
+					newEdge.setNodeB(net,prefNode);//根据优先概率选择邻居节点
+					
+					//Debug.outn("new Edge "+newEdge.AIdx+" "+ newEdge.BIdx);
+
+					if (net.insertEdge(newEdge) != null) { //确保两条边成功建立，不重复。
+
+						//Debug.outn("新节点 "+j+" "+newNode.idx+"邻居 "+newEdge.BIdx);
+						; /* 有可能出现自连接或重复的边 */
+						//Debug.outn("insert "+j);
+						ngbNodes[j] = prefNode.getID();
+						j++;
+					} else {
+						continue;
+					}
+				}//////////////插入边
+
+				return ngbNodes;
+
+			}////////以概率1-p-q
+		}
+
+	}///////////////////////////////////////////////////
+
+	/* (non-Javadoc)
+	 * @see complex.model.AbstractModel#degreePrefAttachFunction(complex.network.AbstractNetwork, int, double[])
+	 */
+	public boolean preferentialChoosNode(AbstractNetwork net, AbstractV node) {
+		
+		if (!net.containVertex(node)) { //若节点不存在
+			//Debug.outn("PFPModel degreePrefChoosed node "+node.getID()+" doesn't exist!");
+			return false;
+		}
+		//double p = 0.0; //目标节点被选中的优先概率
+
+		//int [] degrees = net.getAllDegrees() ;
+		int nodeDegree = net.getVertexDegree(node);
+		int maxDegree = net.getMaxDegree();
+		//int[] degrees = net.getAllDegrees();
+
+		//int randomDegree = MathTool.randomInt(1, maxDegree + 1, 1)[0]; //随机产生 1-最大度值 的随机度值。
+
+		/*节点度的加权和*/
+//		double degreeSum = 0.0;
+//		for (int j : degrees) {
+//			degreeSum = degreeSum
+//					+ Math.pow(degrees[j], 1 + delta * Math.log10(degrees[j]));
+//		}
+		if (MathTool.randomInt( 1, (int) Math.pow(maxDegree, 1 + delta
+				* Math.log10(maxDegree)), 1)[0] < Math.pow(nodeDegree, 1
+				+ delta * Math.log10(nodeDegree))) {
+			//Debug.outn("degreePrefAttachFunction 1 "+Debug.currentTime());
+			return true;
+		} else {
+			//Debug.outn("degreePrefAttachFunction 0 "+Debug.currentTime());
+			return false;
+		}
+
+	}//////////////////////////////////////
+
+
+	public AbstractNetwork getTopNetwork(String netID, int nodeNum,
+			double[] args) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	
+
+}

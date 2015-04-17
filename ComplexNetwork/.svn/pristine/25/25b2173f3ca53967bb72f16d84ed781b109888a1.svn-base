@@ -1,0 +1,10 @@
+package application.immuine;
+
+public interface IImmuineNetwork {
+	
+	public static final int NodeState_SUSCEPTIBLE=0;
+	public static final int nodeState_INFECTIOUS=1;
+	public static final int nodeState_REMOVED=2;
+	public static final int nodeState_VACCINED=3;
+	
+}

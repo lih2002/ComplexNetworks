@@ -1,0 +1,20 @@
+package application.immuine;
+
+import io.FileOperation;
+import java.util.Vector;
+
+public class SpreadDataAnalysis {
+
+	/**
+	 * @param args
+	 */
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+
+	}
+	
+	public void spreadSpread(String filePath,String fileName){
+		Vector<String> data =FileOperation.getValueFromFile(filePath, fileName);
+	}
+
+}

@@ -1,0 +1,180 @@
+package linkPrediction.algorithm;
+
+import tools.Sets;
+import java.util.*;
+
+import network.*;
+import tools.*;
+
+public class LocalSimilarity extends AbstractPredictAlgorithm {
+
+	
+	public float[] test(AbstractNetwork net,
+			AbstractV vA, AbstractV vB) {
+		PredictionIndices []index = new PredictionIndices[1] ;
+		index[0]=PredictionIndices.CN;
+		return computeLinkScore(net, vA, vB, PredictionIndices.values());
+
+	}
+	
+	public float[] computeScore(AbstractNetwork net,
+			AbstractV vA, AbstractV vB) {
+		return computeLinkScore(net, vA, vB, PredictionIndices.values());
+
+	}
+
+	@Override
+	public float [] computeLinkScore(AbstractNetwork net,
+			AbstractV vA, AbstractV vB, PredictionIndices[] index) {
+		// TODO Auto-generated method stub
+		float []result=new float[index.length];
+
+		if (vA.equals(vB)) {
+
+		}
+
+		float CN = 0;
+		float Salton = 0;
+		float Jaccard = 0;
+		float Sorenson = 0;
+		float HubPromoted = 0;
+		float HubDepressed = 0;
+		float LHN = 0;
+		float PA = 0;
+		float AA = 0;
+		float RA = 0;
+
+		Collection<AbstractV> vANgbs = net.getNeighbors(vA);
+		Collection<AbstractV> vBNgbs = net.getNeighbors(vB);
+		Set<AbstractV> unionNgbs = new HashSet<AbstractV>();
+		Set<AbstractV> intersectionNgbs = new HashSet<AbstractV>();
+
+		boolean firstInANgb = true;
+		for (AbstractV ANgb : vANgbs) {
+
+			unionNgbs.add(ANgb);
+
+			for (AbstractV BNgb : vBNgbs) {
+
+				if (ANgb.equals(BNgb)) {
+					intersectionNgbs.add(ANgb);
+				}
+
+				if (firstInANgb) {
+					unionNgbs.add(BNgb);
+
+				}
+
+			}
+			firstInANgb = false;
+		}
+
+		// union of A's and B's neighbors
+		//Debug.outn("并集 "+unionNgbs.size());
+		//Debug.outn("交集 "+intersectionNgbs.size());
+		float kA = vANgbs.size();
+		float kB = vBNgbs.size();
+
+		/* degrees of intersection neighbors */
+		float[] ngbDegrees = new float[intersectionNgbs.size()];
+		int i = 0;
+		for (AbstractV v : intersectionNgbs) {
+			ngbDegrees[i] = net.getNeighborCount(v);
+			i++;
+		}
+
+		/* compute score for different indices */
+		
+		CN = intersectionNgbs.size();
+		//Debug.outn("CN index "+CN);
+
+		Salton = intersectionNgbs.size() / (float) (Math.sqrt(kA * kB));
+
+		Jaccard = (float)intersectionNgbs.size() / (float)unionNgbs.size();
+
+		Sorenson = 2 * intersectionNgbs.size() / (kA + kB);
+
+		HubPromoted = 2 * intersectionNgbs.size() / (kA > kB ? kB : kA);
+		HubPromoted =
+
+		HubDepressed = 2 * intersectionNgbs.size() / (kA > kB ? kA : kB);
+
+		LHN = intersectionNgbs.size() / (kA * kB);
+
+		PA = kA * kB;
+
+		AA = 0;
+		for (float degree : ngbDegrees) {
+			AA = AA + (1 / (float) Math.log(degree));
+		}
+
+		RA = 0;
+		for (float degree : ngbDegrees) {
+			RA = RA + 1 / degree;
+		}
+		
+		/*计算不同的算法分数*/
+		for(int k=0;k<index.length;k++){
+			
+			switch (index[k]) {
+			case AA:
+				result[k]= AA;
+				break;
+
+			case RA:
+				result[k]= RA;
+				break;
+
+			case CN:				
+				//Debug.outn("case CN index "+CN);
+				result[k]= CN;
+				break;
+
+			case Salton:
+				result[k]= Salton;
+				break;
+
+			case Jaccard:
+				result[k]= Jaccard;
+				break;
+
+			case Sorenson:
+				result[k]= Sorenson;
+				break;
+
+			case HubPromoted:
+				result[k]= HubPromoted;
+				break;
+
+			case LHN:
+				result[k]= LHN;
+				break;
+
+			case HubDepressed:
+				result[k]= HubDepressed;
+				break;
+
+			case PA:
+				result[k] = PA;
+				break;
+
+			}
+		}
+
+		return result;
+	}
+
+	@Override
+	public float computeScore(AbstractNetwork net, AbstractV vA, AbstractV vB,
+			PredictionIndices index) {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+
+
+
+
+}
+
+// ///////////////////////////////////////////////////////////////////////////

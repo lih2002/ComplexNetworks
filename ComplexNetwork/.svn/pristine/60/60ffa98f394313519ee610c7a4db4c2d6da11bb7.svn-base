@@ -1,0 +1,759 @@
+/**
+ * 
+ */
+package network;
+
+import java.util.Vector;
+import tools.*;
+import java.util.HashMap;
+import java.util.Arrays;
+import java.util.Iterator;
+
+/**
+ * community network. convert one community to one network. sub community as one
+ * node, links between sub communities as link. node of converted network
+ * contain two properties: inside links number. inside nodes number.
+ * 
+ * @author gexin
+ * 
+ */
+public class CommunityNetwork extends AbstractNetwork {
+
+	private int originalNodeNum;
+	private int originalEdgeNum;
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see complex.network.AbstractNetwork#clone()
+	 */
+	@Override
+	public AbstractNetwork clone() {
+
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see complex.network.AbstractNetwork#cloneOneBlankNetwork()
+	 */
+	@Override
+	public AbstractNetwork cloneOneBlankNetwork() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+
+
+
+	/**
+	 * @param args
+	 */
+	public static void main(String[] args) {
+		float []k1={0.3f,0.2f,0.3f,0.2f};
+		float [] k2={0.25f,0.21428572f,0.25f,0.2857143f};
+		float c=new CommunityNetwork().calculateCorrelation(k1, k2);
+		Debug.outn(c);
+		
+
+	}
+
+	/**
+	 * get total link number in original network.
+	 * </p>= sum(inside link number + link weight)
+	 * 
+	 * @return
+	 */
+	public int statisticOriginalLinkNum() {
+		int linkN = 0;
+
+		int[] allNodeID = this.getver();
+		// append link inside sub-community
+		for (int i = 0; i < allNodeID.length; i++) {
+			linkN += ((CommunityTopNode) this.getNodeByID(allNodeID[i]))
+					.getInsideLinkNum();
+		}
+
+		// append link between sub-communities
+		Vector<AbstractE> allEdge = this.getEdgeArray();
+		for (int j = 0; j < allEdge.size(); j++) {
+			linkN += allEdge.get(j).getWeight();
+		}
+		return linkN;
+	}
+
+	public int statisticOriginalNodeNum() {
+		int nodeN = 0;
+
+		int[] allNodeID = this.getNodeIdArray();
+		// append link inside sub-community
+		for (int i = 0; i < allNodeID.length; i++) {
+			nodeN += ((CommunityTopNode) this.getNodeByID(allNodeID[i]))
+					.getInsideNodeNum();
+		}
+		return nodeN;
+	}
+
+	public int getOriginalNodeNum() {
+		return originalNodeNum;
+	}
+
+	public void setOriginalNodeNum(int originalNodeNum) {
+		this.originalNodeNum = originalNodeNum;
+	}
+
+	public int getOriginalEdgeNum() {
+		return originalEdgeNum;
+	}
+
+	public void setOriginalEdgeNum(int originalEdgeNum) {
+		this.originalEdgeNum = originalEdgeNum;
+	}
+	
+	/**
+	 * link weight correlation for one node
+	 * @return
+	 */
+	public float linkWeightCorrelation(){
+		
+		float orgVar = this.getStandVarLinkWeight();
+		float randVar = this.getReshuffledVarianceLinkWeight(10000);
+		//Debug.outn("link wieght correlation "+orgVar+"  "+randVar);
+		
+		//Debug.outn(randVar);
+		return orgVar/randVar;
+		
+	}
+
+	/**
+	 * get link normalized weigths around specified node.
+	 * 
+	 * @param nodeID
+	 * @return
+	 */
+	public float[] getLinkWeightsAroundNode(int nodeID) {
+
+		int[] ngbNodeIDs = this.getNeighborsArrayId(nodeID);
+		float[] weight = new float[ngbNodeIDs.length];
+		for (int i = 0; i < ngbNodeIDs.length; i++) {
+			CommunityTopEdge edge = (CommunityTopEdge) findEdgeByNodesID(
+					nodeID, ngbNodeIDs[i]);
+			weight[i] = (float) edge.getWeight() ;
+			//Debug.outn("weight around node "+nodeID+" "+weight[i]);
+		}
+		return weight;
+	}
+
+	public float getStandVarLinkWeight() {
+		int[] allNode = this.getNodeIdArray();
+		float sumOfVar = 0;
+		for (int i = 0; i < allNode.length; i++) {
+			sumOfVar += Math.sqrt(getVarianceLinkWeigthAroundNode(allNode[i]));
+		}
+		return sumOfVar / allNode.length;
+	}
+
+	/**
+	 * variance of link weights around specified node.
+	 * 
+	 * @param nodeID
+	 * @return
+	 */
+	public float getVarianceLinkWeigthAroundNode(int nodeID) {
+
+		float varLW = 0;
+		float[] ngbWeight = getLinkWeightsAroundNode(nodeID);
+		float avgWeight = MathTool.average(ngbWeight);
+		for (int i = 0; i < ngbWeight.length; i++) {
+			varLW += (ngbWeight[i] - avgWeight) * (ngbWeight[i] - avgWeight);
+		}
+		//Debug.outn("var around node "+nodeID+" "+varLW);
+		return varLW;
+	}
+	
+	public double [] getAllLinkWeights(){
+		Iterator <AbstractE> edgeIt =getEdgeArray().iterator();
+		double[] weights = new double[getEdgesNum()];
+		int index=0;
+		while(edgeIt.hasNext()){
+			
+			weights[index++]=edgeIt.next().getWeight();
+		}
+		return weights;
+	}
+
+	/**
+	 * randomize the distribution of weight and get variance.
+	 * 
+	 * @param repeatTime
+	 * @return
+	 */
+	public float getReshuffledVarianceLinkWeight(int repeatTime) {
+
+		Vector<AbstractE> allEdges = this.getEdgeArray();
+		HashMap <String,Float> edgeWeightMap=new HashMap<String, Float>();
+		Vector<Float> allWeights=new Vector<Float>();
+		Vector<Float> usedWeights = new Vector<Float>();
+		
+		//get all weights
+		for (int p = 0; p < allEdges.size(); p++) {
+			AbstractE edge = allEdges.get(p);
+			allWeights.add((float)edge.getWeight());			
+		}	
+
+		int[] allNode = this.getNodeIdArray();
+
+		float sumOfRepeatVar = 0;// sum of standard var of network for repeat reshuffle
+		// reshuffle many times
+		for (int i = 0; i < repeatTime; i++) {
+			
+			//reshuffle weights for all the edges	
+			for(int k=0;k<allEdges.size();k++){
+				AbstractE edge = allEdges.get(k);
+				int randomIndex= MathTool.randomInt(0, allWeights.size(), 1)[0];
+				//set new weight for edge
+				edgeWeightMap.put(edge.getAIdx()+"-"+edge.getBIdx()	, allWeights.get(randomIndex));
+				edgeWeightMap.put(edge.getBIdx()+"-"+edge.getAIdx()	, allWeights.get(randomIndex));
+				
+				usedWeights.add(allWeights.get(randomIndex));
+				allWeights.remove(randomIndex);
+			}
+			
+			
+			// each node, entire network.
+			float sumStdVar = 0;//sum of all standard var in one network
+			for (int m = 0; m < allNode.length; m++) {
+
+				float var = 0;
+				int [] ngbNode=this.getNeighborsArrayId(allNode[m]);
+				float [] linkWeights =new float[ngbNode.length];
+				// each link connects this node
+				for (int k = 0; k < ngbNode.length; k++) {			
+					
+					linkWeights[k]=edgeWeightMap.get(this.id2Idx(allNode[m])
+							+"-"+this.id2Idx(ngbNode[k]));
+				}		
+				float avgWeight=MathTool.average(linkWeights);
+				
+				//var 
+				for(int j=0;j<ngbNode.length;j++){
+					var+=(linkWeights[j]-avgWeight)*(linkWeights[j]-avgWeight);
+				}
+				
+				sumStdVar += Math.sqrt(var);
+				//Debug.outn("each node std var "+Math.sqrt(var));
+
+			}// /// each node
+
+			sumOfRepeatVar += sumStdVar / allNode.length;
+			
+			Vector <Float>temp;
+			temp = allWeights;
+			allWeights = usedWeights;
+			usedWeights = temp;
+		}////////////////repeat
+
+		//Debug.outn("sum of repeat var "+sumOfRepeatVar);
+		
+		return sumOfRepeatVar/repeatTime;
+	}	
+	
+	public float nodeLinkWLinkW(){
+		float corr=0;
+		float[] nodeLinkWeights = new float[this.getNetworkSize()];
+		float[] linkW = new float[this.getNetworkSize()];
+		int [] allNodeID = this.getNodeIdArray();
+		for(int i=0;i<allNodeID.length;i++){
+			nodeLinkWeights[i]=((CommunityTopNode)this.getNodeByID(allNodeID[i])).getInsideLinkNum()
+				/(float)this.getOriginalEdgeNum();
+			
+			linkW[i] = MathTool.average( getLinkWeightsAroundNode(allNodeID[i]) )
+				/(float)MathTool.sum(this.getAllLinkWeights());
+		}
+		corr = this.calculateCorrelation(nodeLinkWeights, linkW);
+		float sumNLW=0;
+		float sumLW=0;
+		for(int i=0;i<linkW.length;i++){
+			sumNLW+=nodeLinkWeights[i];
+			sumLW+=linkW[i];
+			//Debug.outn("nodelinkW "+nodeLinkWeights[i]+" linkW "+linkW[i]);
+		}
+		//Debug.outn("sumNLW "+sumNLW+" sumLW "+sumLW);
+		
+		return corr;
+	}
+	
+	public float nodeNodeWLinkW(){
+		float corr=0;
+		float[] nodeNodeWeights = new float[this.getNetworkSize()];
+		float[] nodeLinkW = new float[this.getNetworkSize()];
+		int [] allNodeID = this.getNodeIdArray();
+		for(int i=0;i<allNodeID.length;i++){
+			nodeNodeWeights[i]=((CommunityTopNode)this.getNodeByID(allNodeID[i])).getInsideNodeNum()
+				/(float)this.getOriginalNodeNum();
+			
+			nodeLinkW[i] = MathTool.average( getLinkWeightsAroundNode(allNodeID[i]) )
+				/(float)MathTool.sum(getAllLinkWeights());
+		}
+		corr = this.calculateCorrelation(nodeNodeWeights, nodeLinkW);
+		return corr;
+	}
+	
+	/**
+	 * * node node weight and node link weight on one node.
+	 * @return
+	 */
+	public float nodeNodeWNodeLinkWCorrelation(){
+		
+		float corr=0;
+		float[] nodeNodeW = new float[this.getNetworkSize()];
+		float[] nodeLinkW = new float[this.getNetworkSize()];
+		int [] allNodeID = this.getNodeIdArray();
+		for(int i=0;i<allNodeID.length;i++){
+			CommunityTopNode node = (CommunityTopNode)getNodeByID(allNodeID[i]);
+			//Debug.outn(" NNW NLW "+node.getInsideNodeNum()+"  "+node.getInsideLinkNum());
+			nodeNodeW[i]=(float)node.getInsideNodeNum()/(float)this.getOriginalNodeNum();			
+			nodeLinkW[i] =(float)node.getInsideLinkNum()/(float)this.getOriginalEdgeNum();
+			//Debug.outn(nodeNodeW[i]+" "+nodeLinkW[i]);
+		}
+		corr = this.calculateCorrelation(nodeNodeW, nodeLinkW);
+		return corr;
+		
+	}
+	
+	public float nodeNodeWNodeLinkWBetweenEdgeCorrelation(){
+		float ddCorr = 0;
+		
+		float[] nodeNodeW = new float[2*getEdgesNum()];
+		float[] nodeLinkW = new float[2*getEdgesNum()];
+		Vector<AbstractE> allEdge = this.getEdgeArray();
+		for (int i = 0; i < allEdge.size(); i=i+2) {
+
+			CommunityTopEdge edge = (CommunityTopEdge) allEdge.get(i);
+			CommunityTopNode nodeA = (CommunityTopNode) (this.getNodeByID(this
+					.idx2Id(edge.getAIdx())));
+			CommunityTopNode nodeB = (CommunityTopNode) (this.getNodeByID(this
+					.idx2Id(edge.getBIdx())));
+
+			nodeNodeW[i] = (float) nodeA.getInsideNodeNum()
+					/ this.getOriginalNodeNum();
+			nodeLinkW[i] = (float) nodeB.getInsideLinkNum()
+					/ this.getOriginalEdgeNum();
+			
+			nodeNodeW[i+1] = (float) nodeB.getInsideNodeNum()
+				/ this.getOriginalNodeNum();
+			nodeLinkW[i+1] = (float) nodeA.getInsideLinkNum()
+				/ this.getOriginalEdgeNum();
+			// Debug.outn("degree degree "+d1[i]+" "+d2[i]);
+
+		}
+
+		ddCorr=this.calculateCorrelation(nodeNodeW, nodeLinkW);
+		//Debug.outn(ddCorr);
+		
+		return ddCorr;
+	}
+
+	public float degreeLingkWeightCorrelation(){ /////////////////
+		float corr=0;
+		float[] degrees = new float[this.getNetworkSize()];
+		float[] linkW = new float[this.getNetworkSize()];
+		int [] allNodeID = this.getNodeIdArray();
+		for(int i=0;i<allNodeID.length;i++){
+			degrees[i]=(float)this.getNodeDegreeById(allNodeID[i])/(float)this.getEdgesNum() / 2;
+			
+			linkW[i] = MathTool.average( getLinkWeightsAroundNode(allNodeID[i]) )
+				/(float)MathTool.sum(getAllLinkWeights());
+			//Debug.outn("degree-link w "+degree[i]+" "+linkW[i]);
+		}
+		
+		
+		
+		
+		corr = this.calculateCorrelation(degrees, linkW);
+		return corr;
+	}
+	
+	public float degreeNodeNodeWInOneNodeCorrelation(){
+		
+		float corr=0;
+		float[] degree = new float[this.getNetworkSize()];
+		float[] nodeNodeW = new float[this.getNetworkSize()];
+		int [] allNodeID = this.getNodeIdArray();
+		for(int i=0;i<allNodeID.length;i++){
+			degree[i]=(float)this.getNodeDegreeById(allNodeID[i])/(float)this.getEdgesNum() / 2;;
+			
+			nodeNodeW[i] =(float)((CommunityTopNode)getNodeByID(allNodeID[i])).getInsideNodeNum()/
+			(float)this.getOriginalNodeNum();
+		}
+		corr = this.calculateCorrelation(degree, nodeNodeW);
+		Debug.outn(degree," d");
+		Debug.outn(nodeNodeW, " nnw");
+		Debug.outn("d nnw "+corr);
+		return corr;
+		
+	}
+
+	public float degreeNodeNodeWBetweenEdgeCorrelation(){
+		float ddCorr = 0;
+		
+		float[] degree = new float[2*getEdgesNum()];
+		float[] nodeNodeW = new float[2*getEdgesNum()];
+		Vector<AbstractE> allEdge = this.getEdgeArray();
+		for (int i = 0; i < allEdge.size(); i=i+2) {
+
+			CommunityTopEdge edge = (CommunityTopEdge) allEdge.get(i);
+			CommunityTopNode nodeA = (CommunityTopNode) (this.getNodeByID(this
+					.idx2Id(edge.getAIdx())));
+			CommunityTopNode nodeB = (CommunityTopNode) (this.getNodeByID(this
+					.idx2Id(edge.getBIdx())));
+
+			degree[i] = (float) this.getNodeDegreeByIdx(edge.getAIdx())
+					/ this.getEdgesNum() * 2;
+			nodeNodeW[i] = (float) nodeB.getInsideNodeNum()
+					/ this.getOriginalNodeNum();
+			
+			degree[i+1] = (float) this.getNodeDegreeByIdx(edge.getBIdx())
+			/ this.getEdgesNum() * 2;
+			nodeNodeW[i+1] = (float) nodeA.getInsideLinkNum()
+			/ this.getOriginalNodeNum();
+			// Debug.outn("degree degree "+d1[i]+" "+d2[i]);
+
+		}
+
+		ddCorr=this.calculateCorrelation(degree, nodeNodeW);
+		//Debug.outn(ddCorr);
+		
+		return ddCorr;
+	}
+	
+	
+	public float degreeNodeLinkWInOneNodeCorrelation() {
+				
+		float corr=0;
+		float[] degree = new float[this.getNetworkSize()];
+		float[] nodeLinkW = new float[this.getNetworkSize()];
+		int [] allNodeID = this.getNodeIdArray();
+		for(int i=0;i<allNodeID.length;i++){
+			degree[i]=(float)this.getNodeDegreeById(allNodeID[i])/(float)this.getEdgesNum() / 2;;
+			
+			nodeLinkW[i] =(float)((CommunityTopNode)getNodeByID(allNodeID[i])).getInsideLinkNum()/
+			(float)this.getOriginalEdgeNum();
+		}
+		corr = this.calculateCorrelation(degree, nodeLinkW);
+		return corr;
+	}
+	
+	/**
+	 * degree - node link weight correlation.
+	 * An edge contains two pairs of degree-node link weight
+	 * @return
+	 */
+	public float degreeNodeLinkWBetweenEdgeCorrelation() {
+		
+		float ddCorr = 0;
+		
+		float[] degree = new float[2*getEdgesNum()];
+		float[] nodeLinkW = new float[2*getEdgesNum()];
+		Vector<AbstractE> allEdge = this.getEdgeArray();
+		for (int i = 0; i < allEdge.size(); i=i+2) {
+
+			CommunityTopEdge edge = (CommunityTopEdge) allEdge.get(i);
+			CommunityTopNode nodeA = (CommunityTopNode) (this.getNodeByID(this
+					.idx2Id(edge.getAIdx())));
+			CommunityTopNode nodeB = (CommunityTopNode) (this.getNodeByID(this
+					.idx2Id(edge.getBIdx())));
+
+			degree[i] = (float) this.getNodeDegreeByIdx(edge.getAIdx())
+					/ this.getEdgesNum() * 2;
+			nodeLinkW[i] = (float) nodeB.getInsideLinkNum()
+					/ this.getEdgesNum();
+			
+			degree[i+1] = (float) this.getNodeDegreeByIdx(edge.getBIdx())
+			/ this.getEdgesNum() * 2;
+			nodeLinkW[i+1] = (float) nodeA.getInsideLinkNum()
+			/ this.getOriginalEdgeNum();
+			// Debug.outn("degree degree "+d1[i]+" "+d2[i]);
+
+		}
+
+		ddCorr=this.calculateCorrelation(degree, nodeLinkW);
+		//Debug.outn(ddCorr);
+
+		return ddCorr;
+	}
+
+	public float nodeLinkWCorrelation() {
+		float corr = 0;
+
+		Vector<AbstractE> allEdge = this.getEdgeArray();
+		float[] nodeALinkW = new float[allEdge.size()];
+		float[] nodeBLinkW = new float[allEdge.size()];
+
+		for (int i = 0; i < allEdge.size(); i++) {
+			CommunityTopNode nodeA = (CommunityTopNode) getNodeByID(idx2Id(allEdge
+					.get(i).getAIdx()));
+			CommunityTopNode nodeB = (CommunityTopNode) getNodeByID(idx2Id(allEdge
+					.get(i).getBIdx()));
+			nodeALinkW[i] = nodeA.getInsideLinkNum();
+			nodeBLinkW[i] = nodeB.getInsideLinkNum();
+		}
+		corr = this.calculateCorrelation(nodeALinkW, nodeBLinkW);
+		//Debug.outn("nodeLinkWeight correlation " + corr);
+		return corr;
+	}
+	/**
+	 * node node weight between two nodes.
+	 * @return
+	 */
+	public float nodeNodeWCorrelation() {
+		float corr = 0;
+
+		Vector<AbstractE> allEdge = this.getEdgeArray();
+		float[] nodeALinkW = new float[allEdge.size()];
+		float[] nodeBLinkW = new float[allEdge.size()];
+
+		for (int i = 0; i < allEdge.size(); i++) {
+			CommunityTopNode nodeA = (CommunityTopNode) getNodeByID(idx2Id(allEdge
+					.get(i).getAIdx()));
+			CommunityTopNode nodeB = (CommunityTopNode) getNodeByID(idx2Id(allEdge
+					.get(i).getBIdx()));
+			nodeALinkW[i] = nodeA.getInsideNodeNum();
+			nodeBLinkW[i] = nodeB.getInsideNodeNum();
+		}
+		corr = this.calculateCorrelation(nodeALinkW, nodeBLinkW);
+		//Debug.outn("nodeNodeWeight correlation " + corr);
+
+		return corr;
+	}
+
+	/**
+	 * node node correlation between two nodes
+	 * 
+	 * @return
+	 */
+	public float degreeCorrelation() {
+		float ddCorr = 0;
+		float[] d1 = new float[this.getEdgesNum()];
+		float[] d2 = new float[this.getEdgesNum()];
+		Vector<AbstractE> allEdge = this.getEdgeArray();
+		for (int i = 0; i < allEdge.size(); i++) {
+			CommunityTopEdge edge = (CommunityTopEdge) allEdge.get(i);
+
+			d1[i] = (float) this.getNodeDegreeByIdx(edge.getAIdx())
+					/ this.getEdgesNum() / 2;
+			d2[i] = (float) this.getNodeDegreeByIdx(edge.getBIdx())
+					/ this.getEdgesNum() / 2;
+			// Debug.outn("degree degree "+d1[i]+" "+d2[i]);
+
+		}
+
+		ddCorr = this.calculateCorrelation(d1, d2);
+		//Debug.outn("degree correlation " + ddCorr);
+
+		return ddCorr;
+	}
+	
+	public void getNNWNLW(){
+		nodeNodeWNodeLinkWCorrelation();
+	}
+	
+	public String getAllCorrelation(boolean columnName){
+		StringBuffer corr =new StringBuffer();
+		if(columnName){
+		corr.append("netID\t"+"commN\t"+"commL\t"+"orgN\t"+"orgL\t"+"intraL\t"+
+				"inerL\t"+"Degree\t"+"LW\t"+"NNW\t"+"NLW\t"+"NNW_NLW\t"+"Degree_LW\t"
+				+"Degree_NLW\t"+"Degree_NNW\t"+"NNW_LW\t"+"NLW_LW\t"+"\n");
+		}
+		corr.append(this.getID()+"\t");
+		
+		corr.append(this.getNetworkSize()+"\t");
+		corr.append(this.getEdgesNum()+"\t");
+		corr.append(this.getOriginalNodeNum()+"\t");
+		corr.append(this.getOriginalEdgeNum()+"\t");
+		
+		int allIntraLinkNum = this.getAllIntraLinkNumber();
+		corr.append((float)allIntraLinkNum/(float)this.getOriginalEdgeNum()+"\t");
+		corr.append( (float)(getOriginalEdgeNum()-allIntraLinkNum) / (float)getOriginalEdgeNum()+"\t" );
+		
+		
+		
+		corr.append(this.degreeCorrelation()+"\t");
+		corr.append(this.linkWeightCorrelation()+"\t");
+		corr.append(this.nodeNodeWCorrelation()+"\t");
+		corr.append(this.nodeLinkWCorrelation()+"\t");
+		
+		corr.append(this.nodeNodeWNodeLinkWCorrelation()+"\t");		
+		
+		corr.append(this.degreeLingkWeightCorrelation()+"\t");
+		corr.append(this.degreeNodeLinkWInOneNodeCorrelation()+"\t");
+		corr.append(this.degreeNodeNodeWInOneNodeCorrelation()+"\t");
+		
+		corr.append(this.nodeNodeWLinkW()+"\t");
+		corr.append(this.nodeLinkWLinkW());		
+		corr.append("\n");
+		//Debug.outn(corr.toString());
+		return corr.toString();
+		
+	}
+
+
+	/**
+	 * 
+	 * @param k1
+	 * @param k2
+	 * @return
+	 */
+	public float calculateCorrelation(float[] k1, float[] k2) {
+		float c = 0;
+		float[] k1k2 = new float[k1.length];
+		float[] k1Andk2 = new float[k1.length];
+		float[] k12Andk22 = new float[k1.length];
+
+		for (int i = 0; i < k1.length; i++) {
+			k1k2[i] = k1[i] * k2[i];
+			k1Andk2[i] = (k1[i] + k2[i]);
+			k12Andk22[i] = k1[i] * k1[i] + k2[i] * k2[i];
+		}
+
+		float top = 4 * MathTool.average(k1k2) - MathTool.average(k1Andk2)
+				* MathTool.average(k1Andk2);
+		float bot = 2 * MathTool.average(k12Andk22) - MathTool.average(k1Andk2)
+				* MathTool.average(k1Andk2);
+
+		if (bot < 1E-6 && bot > -1E-6) {
+			return Float.NaN;
+		}
+
+		// Debug.outn("zi "+
+		// Float.toString(4*MathTool.average(k1k2)-MathTool.average(k1Andk2)*MathTool.average(k1Andk2)
+		// ));
+		// Debug.outn("mu "+ Float.toString(2*MathTool.average(k12Andk22)-
+		// MathTool.average(k1Andk2)*MathTool.average(k1Andk2)) );
+
+		return top / bot;
+	}
+	
+	public int getAllIntraLinkNumber(){
+		int number = 0;
+		Vector<AbstractE> allEdge = this.getEdgeArray();
+		for(int i=0;i<allEdge.size();i++){
+			number+=allEdge.get(i).getWeight();
+		}		
+		return number;
+		
+	}
+
+	
+	public int getNodeNodeWeightByID(int nodeID) {
+		// TODO Auto-generated method stub
+		return ((CommunityTopNode)this.nodesColVector.get(id2Idx(nodeID))).getInsideNodeNum();
+	}
+	
+	public int getNodeLinkWeightByID(int nodeID) {
+		// TODO Auto-generated method stub
+		return ((CommunityTopNode)this.nodesColVector.get(id2Idx(nodeID))).getInsideLinkNum();
+	}
+	
+	public float[][] getNNW_NLW(){
+		float[][] nnw_nlw= new float[nodesColVector.size()][2];
+		for(int i=0;i<nodesColVector.size();i++){
+			CommunityTopNode node =(CommunityTopNode)this.nodesColVector.get(i);
+			nnw_nlw[i][0]=node.getInsideNodeNum()/(float)this.originalNodeNum;
+			nnw_nlw[i][1]=node.getInsideLinkNum()/(float)this.originalEdgeNum;
+			
+		}
+		return nnw_nlw;
+	}
+	
+	public int[] getSubCommunitySize(){
+		
+		int [] commSize = new int[this.getNetworkSize()];
+		for(int k=0;k<this.getNetworkSize();k++){
+			commSize[k]=( (CommunityTopNode)getNodeByID(idx2Id(k))).getInsideNodeNum();
+		}
+		
+		Arrays.sort(commSize);
+		return commSize;
+		
+	}
+	
+	
+
+}// ///////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * common network nodes
+ * 
+ * @author ge xin
+ * 
+ */
+class CommunityTopNode extends AbstractV {
+
+	private int insideLinkNum;
+	private int insideNodeNum;
+
+	public CommunityTopNode() {
+		this.ID = -1;
+		this.idx = -1;
+		this.edges = null;
+		this.name = null;
+	}
+
+	public CommunityTopNode(int idx) {
+		this.ID = -1;
+		this.idx = idx;
+		this.edges = null;
+		this.name = null;
+	}
+
+	@Override
+	public AbstractV clone() {
+		AbstractV newNode = new CommunityTopNode();
+		newNode.ID = this.ID;
+		newNode.idx = this.idx;
+		newNode.name = this.name;
+		newNode.edges = null;
+		return newNode;
+	}
+
+	public int getInsideLinkNum() {
+		return insideLinkNum;
+	}
+
+	public void setInsideLinkNum(int insideLinkNum) {
+		this.insideLinkNum = insideLinkNum;
+	}
+
+	public int getInsideNodeNum() {
+		return insideNodeNum;
+	}
+
+	public void setInsideNodeNum(int insideNodeNum) {
+		this.insideNodeNum = insideNodeNum;
+	}
+
+}// //////////////////////CommunityTopNode
+
+/**
+ * common network edge
+ * 
+ * @author ge xin
+ * 
+ */
+class CommunityTopEdge extends AbstractE {
+
+	@Override
+	public AbstractE clone() {
+		AbstractE newEdge = new CommunityTopEdge();
+		newEdge.A_next = this.A_next;
+		newEdge.B_next = this.B_next;
+		newEdge.AIdx = this.AIdx;
+		newEdge.BIdx = this.BIdx;
+		newEdge.weight = this.weight;
+		return newEdge;
+	}
+
+}

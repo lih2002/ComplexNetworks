@@ -1,0 +1,751 @@
+/**
+ * 
+ */
+package application.immuine;
+
+import java.util.*;
+
+import tools.*;
+//import exception.*;
+
+import java.util.Iterator;
+
+import network.*;
+import exception.*;
+
+/**
+ * @author 葛新
+ *         </p>
+ *          拓扑的传播与免疫问题
+ * 
+ */
+
+public class SpreadingNetwork extends AbstractNetwork implements
+		IImmuineNetwork {
+
+	private static final long serialVersionUID = 1L;
+
+	protected float initialInfectiousRate;
+
+	/**
+	 * 传播概率
+	 */
+	protected float spreadRate;
+
+	/**
+	 * 恢复概率
+	 */
+	protected float recoveryRate;
+
+	/**
+	 * @param args
+	 */
+	public static void main(String[] args) {
+		// NetworkImmuine as = new NetworkImmuine(0.5, 0);
+
+	}
+
+	protected Map<AbstractV, Integer> currentNodesStat;// 映射，保存节点状态，节点-节点状态
+
+	/**
+	 * @param spreadRate
+	 * @param recoveryRate
+	 */
+	public SpreadingNetwork(float spreadRate, float initialInfectedRate,
+			float recoveryRate) {
+
+		super();
+
+		/* 初始化传播率和恢复率 */
+		this.spreadRate = spreadRate;
+		this.recoveryRate = recoveryRate;
+		this.initialInfectiousRate = initialInfectedRate;
+
+	}
+
+	/**
+	 * 
+	 * @param nodeState
+	 */
+	public void initNodesStat(int nodeState) {
+
+
+		/* 初始化节点状态，默认为 susceptible */
+		if (currentNodesStat == null) {
+			currentNodesStat = new TreeMap<AbstractV, Integer>();
+		}
+
+		for (AbstractV v : getAllVertex()) {
+			this.currentNodesStat.put(v, nodeState);
+		}
+
+	}
+
+	/**
+	 * 获得节点状态
+	 * 
+	 * @param nodeID
+	 *            节点ID
+	 * @return 节点状态
+	 */
+	public synchronized int getNodeStat(AbstractV node) {
+		return currentNodesStat.get(node);
+	}
+
+	/**
+	 * 添加新的节点及其状态
+	 * 
+	 * @param nodeID
+	 * @param stat
+	 */
+	public synchronized void addNodeWithStat(AbstractV node, int stat) {
+		currentNodesStat.put(node, stat);
+	}
+
+	/**
+	 * 处于某一状态节点的数量
+	 * 
+	 * @param stat
+	 * @return
+	 */
+	public int getNodeNumInState(int stat) {
+		int count = 0;
+		Iterator<Integer> statIt = currentNodesStat.values().iterator();
+		while (statIt.hasNext()) {
+			if (statIt.next().equals(Integer.valueOf(stat))) {
+				count++;
+			}
+		}
+		return count;
+	}
+
+	/**
+	 * 处于某一状态的节点集合
+	 * 
+	 * @param state
+	 * @return
+	 */
+	public Set<AbstractV> nodesInState(int state) {
+		Set<AbstractV> nodes = new TreeSet<AbstractV>();
+		Iterator<AbstractV> nodesIt = currentNodesStat.keySet().iterator();
+		while (nodesIt.hasNext()) {
+			AbstractV node = nodesIt.next();
+			if (currentNodesStat.get(node).intValue() == state) {
+				nodes.add(node);
+			}
+		}
+		return nodes;
+	}
+
+	/**
+	 * 处于某一状态节点的百分比
+	 * 
+	 * @param stat
+	 * @return
+	 */
+	public double getStatePercent(int stat) {
+		if (getNodeNumInState(stat) == this.getVertexCount())
+			return 1;
+		return (double) getNodeNumInState(stat) / (double) this.getVertexCount();
+	}
+
+	protected synchronized double getSpreadRate() {
+		return spreadRate;
+	}
+
+	protected synchronized void setSpreadRate(float spreadRate) {
+		this.spreadRate = spreadRate;
+	}
+
+	protected synchronized double getRecoveryRate() {
+		return recoveryRate;
+	}
+
+	protected synchronized void setRecoveryRate(float recoveryRate) {
+		this.recoveryRate = recoveryRate;
+	}
+
+	protected synchronized Map<AbstractV, Integer> getNodesStat() {
+		return currentNodesStat;
+	}
+
+	protected synchronized void setNodesStat(Map<AbstractV, Integer> nodesStat) {
+		this.currentNodesStat = nodesStat;
+	}
+
+	public Vector<AbstractV> getNodesInState(int stat) {
+
+		Vector<AbstractV> nodes = new Vector<AbstractV>();
+		Iterator<AbstractV> nodeIt = currentNodesStat.keySet().iterator();
+		while (nodeIt.hasNext()) {
+			AbstractV nodeID = nodeIt.next();
+			if (currentNodesStat.get(nodeID).equals(stat)) {
+				nodes.add(nodeID);
+			}
+		}
+		return nodes;
+
+	}
+
+	@Override
+	public AbstractNetwork clone() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public AbstractNetwork cloneOneBlankNetwork() {
+		return null;
+	}
+
+	@Override
+	public AbstractE createNewEdge() {
+		return new ImmuineTopEdge();
+	}
+
+	@Override
+	public AbstractV createNewVertex(String ID) {
+		// TODO Auto-generated method stub
+		return new ImmuineTopNode();
+	}
+
+	public void timeAction(long stepCount) {
+		if (stepCount == 1) {
+			Debug.outn("step 0 " + getStatePercent(NODE_STATE_INFECTIOUS));
+		}
+		SIUpdateNodesState();
+		Debug.outn(this.getNetID() + " step " + stepCount + " "
+				+ getStatePercent(NODE_STATE_INFECTIOUS));
+
+	}
+
+	/**
+	 * 改变某一个节点的状态
+	 * 
+	 * @param node
+	 * @param stat
+	 * @return
+	 */
+	public void changeNodeState(AbstractV node, int stat)
+			throws NodeDoesNotExistException {
+		if (currentNodesStat.get(node) == null) {
+			throw new NodeDoesNotExistException("node " + node
+					+ " doesn't exist");
+
+		} else {
+			currentNodesStat.put(node, stat);
+		}
+	}
+
+	/**
+	 * 改变某些节点的状态，
+	 * 
+	 * @param nodes
+	 *            
+	 * @param stat
+	 * @return
+	 */
+	public boolean changeNodesState(Collection<AbstractV> nodes, int stat) {
+			
+		for(AbstractV eachNode:nodes){
+			try {
+				changeNodeState(eachNode, stat);
+			} catch (NodeDoesNotExistException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}	
+
+		return true;
+	}
+
+	/**
+	 * 根据传播等参数更新节点状态。
+	 */
+	public void SIUpdateNodesState() {
+		stepUpdateNodesState(this.spreadRate, 0);
+		// Map<Integer, Integer> nodesNextStat = new TreeMap<Integer,
+		// Integer>();
+		// Iterator<Integer> nodeIt = this.currentNodesStat.keySet().iterator();
+		// int nodeId;
+		// int[] ngbNodes;
+		// while (nodeIt.hasNext()) {
+		// nodeId = nodeIt.next();
+		//
+		// if (currentNodesStat.get(nodeId).intValue() ==
+		// this.nodeState_INFECTIOUS) { //
+		// ngbNodes = this.getNeighborsArray(this.id2Idx(nodeId));
+		// for (int i = 0; i < ngbNodes.length; i++) { //
+		// if (currentNodesStat.get(idx2Id(ngbNodes[i])).intValue() ==
+		// this.NodeState_SUSCEPTIBLE
+		// && MathTool.happenProbability(this.spreadRate)) {
+		//
+		// nodesNextStat.put(idx2Id(ngbNodes[i]),nodeState_INFECTIOUS);//
+		// }
+		// }
+		// }
+		//
+		// }
+		//
+		// /* 更新节点状态 */
+		// this.currentNodesStat.putAll(nodesNextStat);
+	}
+
+	public void SISUpdateNodesState() {
+		stepUpdateNodesState(this.spreadRate, this.recoveryRate);
+	}
+
+	/**
+	 * susceptible infectious susceptible model
+	 */
+	private void stepUpdateNodesState(double spreadRate, double recoveryRate) {
+		Map<AbstractV, Integer> nodesNextStat = new TreeMap<AbstractV, Integer>();
+		Iterator<AbstractV> nodeIt = this.currentNodesStat.keySet().iterator();
+		AbstractV node;
+		
+		while (nodeIt.hasNext()) {
+			node = nodeIt.next();
+
+			if (currentNodesStat.get(node).intValue() == NODE_STATE_INFECTIOUS) { //如果节点处于可感染状态
+
+				/**
+				 *  spread infected node to susceptible neighbor nodes
+				 */
+								
+				for(AbstractV eachNgb:this.getNeighbors(node)){
+					if (currentNodesStat.get(eachNgb).intValue() == this.NODE_STATE_SUSCEPTIBLE
+							&& MathTool.happenProbability(this.spreadRate)) { // infected
+
+						nodesNextStat.put(eachNgb,	NODE_STATE_INFECTIOUS);// change state
+					}
+				}				
+
+				/* recovery infected->susceptible */
+				if (MathTool.happenProbability(this.recoveryRate)) {
+					// Debug.outn("recovery");
+					nodesNextStat.put(node, NODE_STATE_SUSCEPTIBLE);
+				}
+
+			}// each infected node
+
+		}// each node
+
+		/* 更新节点状态 */
+		this.currentNodesStat.putAll(nodesNextStat);
+	}
+
+	/**
+	 * 随机地改变某些节点状态
+	 * 
+	 * @param nodes
+	 *            节点集合
+	 * @param rate
+	 *            要改变的节点的百分比
+	 * @param stat
+	 *            改变到该状态
+	 * @return
+	 */
+	public boolean randomChangeNodesState(Collection<AbstractV> nodes, float rate, int stat) {
+	
+		this.changeNodesState(RandomOperation.randomSelectSome(nodes, rate), stat);
+		
+		return true;
+	}
+
+	/**
+	 * 随机地选择网络中某些节点进行免疫
+	 * 
+	 * @param 被随机选择的节点
+	 * @param rate
+	 *            被免疫节点占所有节点的百分比
+	 */
+	public void randomImmuine(Collection<AbstractV> nodes, float rate) {
+		randomChangeNodesState(nodes, rate, this.NODE_STATE_VACCINED);
+	}
+
+	/**
+	 * 目标免疫，对度值大于某一阈值的节点进行免疫
+	 * 
+	 * @param thresholdDegree
+	 *            度阈值，大于该度值节点将被免疫
+	 */
+	public void targetDegreeImmuine(Collection<AbstractV> nodesID, int thresholdDegree) {
+
+		for(AbstractV eachNode:nodesID){
+			if (this.getNeighborCount(eachNode) > thresholdDegree) { // 免疫大度值节点
+				currentNodesStat.put(eachNode, this.NODE_STATE_VACCINED);
+			}
+		}
+	}
+
+	/**
+	 * immunize nodes with highest degree
+	 * 
+	 * @param immunizedRate
+	 */
+	public void targetDegreeImmuine(float immunizedRate) {
+		int nodeNum=this.getVertexCount();
+		
+		AbstractV[] allNodes = (AbstractV[])getVertices().toArray(new AbstractV[nodeNum]);
+		
+		int[] allNodeDegree = new int[allNodes.length];
+
+		for (int i = 0; i < allNodes.length; i++) {
+			allNodeDegree[i] = this.getNeighborCount(allNodes[i]);
+		}
+
+		
+		/**
+		 * sort degree,bubble, decrease sequence
+		 */
+		for (int m = 0; m < allNodes.length; m++) {
+			for (int n = allNodes.length - 1; n > m; n--) {
+				if (allNodeDegree[n] > allNodeDegree[n - 1]) {
+					int tempDegree = allNodeDegree[n - 1];
+					allNodeDegree[n - 1] = allNodeDegree[n];
+					allNodeDegree[n] = tempDegree;
+
+					// sort id according to degree
+					AbstractV tempNodeID = allNodes[n - 1];
+					allNodes[n - 1] = allNodes[n];
+					allNodes[n] = tempNodeID;
+
+				}
+			}
+		}
+
+		for (int k = 0; k < allNodes.length * immunizedRate; k++) {
+			try {
+				this.changeNodeState(allNodes[k], NODE_STATE_VACCINED);
+				Debug.outn(allNodeDegree[k]);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+	}
+
+	/**
+	 * 熟人免疫，随机选择若干个节点，并对这些节点的若干个邻居节点免疫
+	 * 
+	 * @param rate
+	 *            随机选择节点比率。
+	 * @param ngbNum
+	 *            随机选择节点后，选择该节点的邻居节点数量。若所有邻居节点数量少于ngbNum，所有邻居节点都被选择。
+	 */
+	public void acquaintanceImmuine(float rate, int ngbNum) {
+		
+		// 随机选择一部分节点
+		Collection<AbstractV> randomSelectNodes=RandomOperation.randomSelectSome(this.getVertices(), rate);
+	
+		/**
+		 *  处理每一个被随机选择出来的节点
+		 */
+		for(AbstractV eachNode:randomSelectNodes){
+						
+			/** 
+			 * 随机选择邻居节点进行免疫 
+			 */
+			Collection<AbstractV> ngbs=getNeighbors(eachNode);
+			if(ngbNum>ngbs.size()){
+				ngbNum=ngbs.size();
+			}
+	
+			changeNodesState(RandomOperation.randomSelectSome(ngbs, ngbNum), NODE_STATE_VACCINED);
+			
+		}
+	}
+	
+	
+
+	/**
+	 * 从给定的节点中随机选择节点* 
+	 * @param nodesID
+	 *            给定节点数组
+	 * @param rate
+	 *            选择节点的比率
+	 * @return 随机选择的节点ID数组
+	 */
+	public Set<AbstractV> randomSelectNodes(Collection<AbstractV> nodes, float rate) {
+		if (rate < 0) {
+			rate = 0;
+		}
+		if (rate > 1) {
+			rate = 1;
+		}
+			
+		return RandomOperation.randomSelectSome(nodes, rate);
+	}
+	
+
+	/**
+	 * 
+	 * @return
+	 */
+	public Map<AbstractV, Integer> getAllNodesState() {
+		Map<AbstractV, Integer> statMap = new TreeMap<AbstractV, Integer>();
+
+		return statMap;
+	}
+
+	// public void clearHistoryStat() {
+	// this.historyNodesStat.clear();
+	// }
+
+	public boolean removeListenerCondition() {
+
+		return false;
+	}
+
+	/**
+	 * 某个状态的节点数量是否达到某一值
+	 * 
+	 * @param stat
+	 * @param value
+	 * @return
+	 */
+	public boolean ifLower(int stat, int num) {
+
+		return false;
+	}
+
+	/**
+	 * 
+	 * @param saveNet
+	 *            save network with node stat
+	 * @param repeatTimes
+	 * @param filePath
+	 * @param fileName
+	 * @param postfix
+	 * @return
+	 */
+	public double[] spreadAction(float immunizationRate, boolean saveNet,
+			int repeatTimes, String filePath, String fileName, String postfix) {
+
+		// int nodeDegreeNum=0;
+		int nodeNum=this.getVertexCount();		
+		
+		AbstractV[] allNodes =getVertices().toArray(new AbstractV[nodeNum]);
+		
+		int[] allDegree = this.getAllVertexDegrees();
+		int maxDegree = MathTool.getMax(allDegree);
+		int[] degreeFeq = new int[maxDegree + 1];
+		for (int p = 0; p < allDegree.length; p++) {
+			degreeFeq[allDegree[p]]++;
+		}
+
+		
+		/*
+		 * if many final infected rate = zero, it means all the final rates are
+		 * zero
+		 */
+		int zeroCount = 0;
+
+		Map<AbstractV, Integer> nodeDegreeMap = new HashMap<AbstractV, Integer>();
+		for (int i = 0; i < allNodes.length; i++) {
+			nodeDegreeMap.put(allNodes[i], this.getNeighborCount(allNodes[i]));
+		}
+
+		// Debug.outn(getStatPercent(this.nodeState_INFECTIOUS));
+		// Vector<Double> IRate = new Vector<Double>();
+
+		// save each simulation result infected percent, each vector repeatR
+		// stores
+		// infected rate per time step.
+		Vector[] repeatInfectedRate = new Vector[repeatTimes];
+		// Map [] infectedDegree = new TreeMap[repeatTimes];
+
+		for (int repeatNum = 0; repeatNum < repeatTimes; repeatNum++) { // repeat
+
+			this.initNodesStat(this.NODE_STATE_SUSCEPTIBLE);
+			targetDegreeImmuine(immunizationRate);
+
+			Debug.outn("repeat " + (repeatNum + 1));
+			// set all node state to sucscetible
+
+			// random nodes are infectious accordint to init percent
+			this.randomChangeNodesState(this.getVertices(),
+					this.initialInfectiousRate, this.NODE_STATE_INFECTIOUS);
+
+			repeatInfectedRate[repeatNum] = new Vector<Double>();
+			int timeStep = 1;
+			int threshold = 1;
+
+			StringBuffer degreeInfectedString = new StringBuffer();
+
+			while (timeStep > 0) { // start time step
+
+				int[] degreeInfectedNum = new int[maxDegree + 1];
+
+				/* get degree of nodes infected */
+
+				Vector<AbstractV> infectedNodes = this.getNodesInState(this.NODE_STATE_INFECTIOUS);
+
+				/*
+				 * get the degree of infected nodes add 1 to degree
+				 */
+				// for(int m=0;m<infectedNodes.size();m++){
+				// int infectedDegree = nodeDegreeMap.get( infectedNodes.get(m)
+				// ) ;
+				// //number of degree of infected node +1
+				// degreeInfectedNum[infectedDegree]++;
+				// //int num = degreeInfectedMap.get(infectedDegree)+1;
+				// //degreeInfectedMap.put(infectedDegree, num);
+				//
+				// }
+
+				double infectedPercent = (double) infectedNodes.size()
+						/ nodeNum;
+
+				/* store current infected percentage */
+				repeatInfectedRate[repeatNum].add(infectedPercent);
+
+				// if (this.getStatNum(this.nodeState_INFECTIOUS) >= this
+				// .getNetworkSize()) {
+				// break;
+				//
+				// }
+
+				if (infectedPercent * 10 >= threshold) {
+					// Debug.out(step+" ");
+					// Debug.out(" threshold "+threshold+" ");
+					threshold++;
+				}
+
+				if (infectedPercent >= 0.999) {
+					// Debug.outn(step+" ");
+					break;
+				}
+
+				// avoid unlimited loop
+				if (timeStep > 10 * nodeNum) {
+					break;
+				}
+
+				// save pajek net
+				if (saveNet && repeatNum == 0 && timeStep % 10 == 0) {
+					Debug.outn("save pajek");
+					CAIDARawData.formatToPajekNet(this, filePath, "." + timeStep, "");
+				}
+
+				for (int dd = 0; dd < degreeInfectedNum.length; dd++) {
+					degreeInfectedString.append((float) degreeInfectedNum[dd]
+							/ (float) degreeFeq[dd] + " ");
+					// Debug.out(degreeInfectedNum[dd]+" ");
+				}
+				degreeInfectedString.append("\n");
+				// Debug.outn("\n");
+
+				this.SISUpdateNodesState();
+
+				timeStep++;
+
+			}// / time step
+
+			// FileOperation.saveStringToFile(filePath+".InfectedDegree",
+			// degreeInfectedString.toString(), false);
+
+			/*
+			 * delete departure data. If zeroCount>repeat times, it means all
+			 * the stable infected rate are zero
+			 */
+			if (zeroCount < repeatTimes
+					&& ((Double) repeatInfectedRate[repeatNum]
+							.get(repeatInfectedRate[repeatNum].size() - 1)) == 0.0) {
+				// Debug.outn("del o");
+				repeatNum--;
+				zeroCount++;
+			}
+
+		}// ///////////////////////////////////////////////repeat()
+
+		// out put each repeat result
+		// for(int k=0;k<repeatInfectedRate.length;k++){
+		// //the last rate of each repeat
+		// for(int q=0;q<50;q++){
+		// double r=
+		// (Double)repeatInfectedRate[k].get(repeatInfectedRate[k].size()-q-1);
+		// Debug.out(r+" ");
+		// }
+		// Debug.outn("");
+		// }
+
+		// average result rate
+		// max length of time
+		int maxTime = 1;
+		for (int j = 0; j < repeatTimes; j++) {
+			if (repeatInfectedRate[j].size() > maxTime) {
+				maxTime = repeatInfectedRate[j].size();
+			}
+		}
+		// Debug.outn("maxtime "+maxTime);
+
+		double[] averageResult = new double[maxTime];
+		for (int time = 0; time < maxTime; time++) {// every time step
+			for (int m = 0; m < repeatTimes; m++) { // repeat
+				if (repeatInfectedRate[m].size() <= time) {
+					averageResult[time] += 1;
+				} else {
+					averageResult[time] += (Double) repeatInfectedRate[m]
+							.get(time);
+				}
+			}
+		}
+
+		double[] infectedRate = new double[maxTime];
+		for (int i = 0; i < infectedRate.length; i++) {
+			// Debug.outn("avg "+averageResult[i]);
+			infectedRate[i] = averageResult[i] / repeatTimes;
+			// Debug.outn(infectedRate[i]);
+		}
+
+		return infectedRate;
+
+	}
+
+	@Override
+	public AbstractNetwork getBlankNetwork() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+}// //////////////////// spread action //////////////////////////////////////////////////
+
+/**
+ * common network nodes
+ * 
+ * @author ge xin
+ * 
+ */
+class ImmuineTopNode extends AbstractV {
+
+	public ImmuineTopNode() {
+
+	}
+
+	@Override
+	public AbstractV clone() {
+		AbstractV newNode = new ImmuineTopNode();
+
+		return newNode;
+	}
+
+}
+
+/**
+ * common network edge
+ * 
+ * @author ge xin
+ * 
+ */
+class ImmuineTopEdge extends AbstractE {
+
+	@Override
+	public AbstractE clone() {
+		AbstractE newEdge = new ImmuineTopEdge();
+
+		newEdge.weight = this.weight;
+		return newEdge;
+
+	}
+
+}

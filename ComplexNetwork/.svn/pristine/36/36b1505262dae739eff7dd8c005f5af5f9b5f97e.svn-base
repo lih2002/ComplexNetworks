@@ -1,0 +1,29 @@
+package linkPrediction.algorithm;
+import java.util.HashMap;
+import java.util.Map;
+
+import network.*;
+
+public abstract class AbstractPredictAlgorithm{
+	
+	Map<String,Float> scores=new HashMap<String,Float>();
+	
+
+	/**
+	 * 
+	 * @param net
+	 * @param vA 节点A
+	 * @param vB 节点B
+	 * @param index 预测指标
+	 * @return 被预测边的分数值
+	 */
+	public abstract float [] computeLinkScore(AbstractNetwork net, AbstractV vA,AbstractV vB,PredictionIndices []index);
+
+	public float computeScore(AbstractNetwork net, AbstractV vA, AbstractV vB,
+			PredictionIndices index) {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+	
+
+}
